@@ -1,0 +1,31 @@
+{
+  "name": "command-line-trading-bot",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "license": "MIT",
+  "description": "A Command-line trading bot using Node.js and TypeScript",
+  "main": "dist/cli.js",
+  "scripts": {
+    "dev": "ts-node src/cli.ts",
+    "build": "tsc -p .",
+    "start": "node dist/cli.js",
+    "help": "node dist/cli.js -- help",
+    "cli": "node dist/cli.js"
+  },
+  "keywords": [],
+  "author": "",
+  "dependencies": {
+    "commander": "^14.0.0",
+    "dotenv": "^17.2.1",
+    "pino": "^9.9.0",
+    "ws": "^8.18.1",
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/commander": "^2.12.5",
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
