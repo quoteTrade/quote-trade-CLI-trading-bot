@@ -11,6 +11,14 @@ import {getInstrumentMeta, tfToMs} from "./utils";
 import {TradeExecutor} from "./execution/executor";
 import {ListenKeyFeedBus} from "./feeds/listenkey-feed-bus";
 import {logOrderUpdate, logPositionChange, logPositionSnapshot} from "./log/trade-logger";
+import { resolveCredentials, getResolvedWalletPrivateKey } from "./auth/credentials";
+import {
+  getDepositAddress,
+  getDepositChainConfig,
+  transferERC20ToDeposit,
+  isDepositToken,
+  DEPOSIT_TOKENS,
+} from "./auth/deposit";
 
 type RunnerKey = string;
 const runners = new Map<RunnerKey, RSIRunner>();
@@ -28,6 +36,10 @@ program
 program.helpOption(false);
 program.addHelpCommand(false);
 program.version("", "", "");
+
+// Global options
+program.option("--create-wallet", "Generate a new wallet, authenticate, then run the command (no .env API keys needed)");
+program.option("--debug", "Enable debug logging (auth steps, no secrets)");
 
 // ─────────────────────────────
 // Custom `help` command
@@ -50,6 +62,16 @@ program
     .option("--maxOrdersPerCycle <N>", "Max orders per band cycle (flatten + reverse)", (v) => parseInt(v, 10), 2)
     // .option("--candleMs <N>", "Candle size in ms (default 60000)", (v) => parseInt(v, 10), 60_000)
     .action(async (opts) => {
+        const globalOpts = program.opts();
+        const createWallet = globalOpts.createWallet === true;
+        if (globalOpts.debug) process.env.CLI_DEBUG = "1";
+        try {
+            await resolveCredentials({ createAccount: createWallet });
+        } catch (e: any) {
+            console.error("❌", e?.message ?? e);
+            process.exit(1);
+        }
+
         const symbol = opts.symbol.toUpperCase();
 
         if (!Number(opts.notionalUsd)) {
@@ -155,6 +177,60 @@ program
     .command("rsi:list")
     .action(() => {
         console.log([...runners.keys()]);
+    });
+
+// ─────────────────────────────
+// deposit: same flow as telegram bot (getDepositAddress + ERC20 transfer)
+// ─────────────────────────────
+program
+    .command("deposit")
+    .description("Deposit USDC or USDT to your trading account (ERC-20 transfer to platform address)")
+    .requiredOption("--amount <number>", "Amount to deposit (e.g. 100)")
+    .requiredOption("--currency <USDC|USDT>", "Currency: USDC or USDT")
+    .action(async (opts) => {
+        const globalOpts = program.opts();
+        if (globalOpts.debug) process.env.CLI_DEBUG = "1";
+        const createWallet = globalOpts.createWallet === true;
+        try {
+            await resolveCredentials({ createAccount: createWallet });
+        } catch (e: any) {
+            console.error("❌", e?.message ?? e);
+            process.exit(1);
+        }
+
+        const amount = parseFloat(opts.amount);
+        if (isNaN(amount) || amount <= 0) {
+            console.error("❌ Invalid amount. Use e.g. --amount 100");
+            process.exit(1);
+        }
+        const currency = (opts.currency ?? "").toUpperCase();
+        if (!isDepositToken(currency)) {
+            console.error("❌ Currency must be one of:", DEPOSIT_TOKENS.join(", "));
+            process.exit(1);
+        }
+
+        const walletKey = getResolvedWalletPrivateKey();
+        if (!walletKey) {
+            console.error("❌ Deposit requires wallet login. Set WALLET_PRIVATE_KEY in .env or use --create-wallet.");
+            process.exit(1);
+        }
+
+        try {
+            const { address: depositAddress } = await getDepositAddress();
+            const chainConfig = getDepositChainConfig();
+            console.log(`\n📤 Depositing ${amount} ${currency} to platform (${chainConfig.name})...`);
+            const txHash = await transferERC20ToDeposit(
+                chainConfig,
+                walletKey,
+                currency,
+                amount,
+                depositAddress
+            );
+            console.log(`\n✅ Deposit sent. Transaction hash: ${txHash}`);
+        } catch (e: any) {
+            console.error("❌ Deposit failed:", e?.message ?? e);
+            process.exit(1);
+        }
     });
 
 program.parse(process.argv);
