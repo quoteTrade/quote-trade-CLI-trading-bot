@@ -75,9 +75,20 @@ npm run build
 npm run cli -- rsi:enable --symbol BTC
 ```
 
+### Create wallet and run (no .env API keys)
+Generate a new wallet, authenticate, then start the RSI runner. Save the printed private key for future runs.
+```bash
+npm run cli -- rsi:enable --symbol BTC --create-wallet
+```
+
 ### With custom options
 ```bash
 npm run cli -- rsi:enable   --symbol BTC   --notionalUsd 100   --timeframe 1m   --period 14   --low 30   --high 70   --maxOrdersPerCycle 2
+```
+
+With a new wallet:
+```bash
+npm run cli -- rsi:enable --symbol BTC --notionalUsd 100 --timeframe 1m --create-wallet
 ```
 
 **Windows PowerShell** (same syntax):
@@ -95,6 +106,8 @@ Start an RSI strategy runner for a symbol.
 **Required**
 - `--symbol <SYMBOL>` — e.g., `BTC`
 
+**Auth (global option)**
+- `--create-wallet` — generate a new wallet, authenticate via challenge/sign, then run (no `TRADE_API_KEY` / `TRADE_API_SECRET` in .env). Save the printed private key and add to .env as `WALLET_PRIVATE_KEY` for next runs.
 **Sizing**
 - `--notionalUsd <USD>` — order size in USD (default: `20`)
 
@@ -106,6 +119,27 @@ Start an RSI strategy runner for a symbol.
 
 **Cycle control**
 - `--maxOrdersPerCycle <N>` — per‑band cap (default `2` = *flatten then reverse*)
+
+---
+
+## 💸 Command: `deposit`
+
+Deposit USDC or USDT to your trading account via ERC-20 transfer (same flow as the telegram bot). Requires wallet auth (`WALLET_PRIVATE_KEY` or `--create-wallet`).
+
+**Required**
+- `--amount <number>` — amount to deposit (e.g. `100`)
+- `--currency <USDC|USDT>` — token to deposit
+
+**Config (in .env)**
+- `DEPOSIT_NETWORK` — `mainnet`, `sepolia`, `polygon`, or `amoy` (default: `mainnet`). Native token symbol adjusts automatically (ETH for Ethereum/Sepolia, POL for Polygon/Amoy).
+- `DEPOSIT_RPC_URL` — optional; RPC URL for the network
+- `USDC_CONTRACT_ADDRESS` / `USDT_CONTRACT_ADDRESS` — ERC-20 contract addresses for the network
+
+**Examples**
+```bash
+npm run cli -- deposit --amount 100 --currency USDC
+npm run cli -- deposit --amount 50 --currency USDT --create-wallet
+```
 
 ---
 
