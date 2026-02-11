@@ -1,5 +1,6 @@
 import axios from 'axios';
 import crypto from "crypto";
+import { signRequestBody } from "../auth/signing";
 
 class HttpService {
   private readonly apiUrl: string;
@@ -18,15 +19,21 @@ class HttpService {
     return path.includes("?") ? `${this.apiUrl}${path}&channel=${this.channel}` : `${this.apiUrl}${path}?channel=${this.channel}`;
   }
 
+  private getCredentials(config: any) {
+    return {
+      requestToken: config.requestToken ?? process.env.TRADE_API_KEY ?? this.requestToken,
+      requestSecret: config.requestSecret ?? process.env.TRADE_API_SECRET ?? this.requestSecret,
+    };
+  }
+
   public async get(path: string, config: any = {}): Promise<string> {
-    // Simulating an API request
     const fullUrl = this.getFullPath(path);
     const configHeaders = {
       headers: config.headers || {},
     };
-    if (config.requestSecret || this.requestSecret) {
-      // Generate HMAC-SHA256 hash
-      configHeaders.headers.signature = crypto.createHmac("sha256", (config.requestSecret || this.requestSecret))
+    const { requestSecret } = this.getCredentials(config);
+    if (requestSecret) {
+      configHeaders.headers.signature = crypto.createHmac("sha256", requestSecret)
           .update(JSON.stringify(path))
           .digest("hex");
     }
@@ -35,19 +42,15 @@ class HttpService {
       axios
           .get(fullUrl, configHeaders)
           .then((response) => {
-            // console.log(response);
-            if (response.data) {
-              if (response.data?.status === 'error') {
-                reject(response.data);
-              } else if (response.data?.error) {
-                reject(response.data);
-              } else {
-                resolve(response.data);
+            const data = response.data;
+            if (data != null && typeof data === 'object') {
+              if (data.status === 'error' || data.error) {
+                reject(data);
+                return;
               }
-            } else {
-              const resErr = { error: 'Not changed...' };
-              reject(resErr);
             }
+            // Resolve with data or {} when body is empty (e.g. 204 or empty JSON)
+            resolve(data != null ? data : {});
           })
           .catch((error) => {
             reject(error);
@@ -64,15 +67,12 @@ class HttpService {
 
     reqBody.channel = this.channel;
 
-    if (config.requestSecret || this.requestSecret) {
-      // Generate HMAC-SHA256 hash
-      configHeaders.headers.signature = crypto.createHmac("sha256", (config.requestSecret || this.requestSecret))
-          .update(JSON.stringify(reqBody))
-          .digest("hex");
+    const { requestToken, requestSecret } = this.getCredentials(config);
+    if (requestSecret) {
+      configHeaders.headers.signature = signRequestBody(requestSecret, reqBody);
     }
-
-    if (config.requestToken || this.requestToken) {
-      axios.defaults.headers.common['X-Mbx-Apikey'] = (config.requestToken || this.requestToken);
+    if (requestToken) {
+      axios.defaults.headers.common['X-Mbx-Apikey'] = requestToken;
     }
 
     return new Promise((resolve, reject) => {
@@ -81,19 +81,14 @@ class HttpService {
           .then((response) => {
             delete axios.defaults.headers.common['X-Mbx-Apikey'];
 
-            // console.log(response);
-            if (response.data) {
-              if (response.data?.status === 'error') {
-                reject(response.data);
-              } else if (response.data?.error) {
-                reject(response.data);
-              } else {
-                resolve(response.data);
+            const data = response.data;
+            if (data != null && typeof data === 'object') {
+              if (data.status === 'error' || data.error) {
+                reject(data);
+                return;
               }
-            } else {
-              const resErr = { error: 'Not changed...' };
-              reject(resErr);
             }
+            resolve(data != null ? data : {});
           })
           .catch((error) => {
             delete axios.defaults.headers.common['X-Mbx-Apikey'];
