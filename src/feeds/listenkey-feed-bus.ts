@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import * as dotenv from "dotenv";
 import EventEmitter from "node:events";
 import {MAGENTA, RESET} from "../ANSI";
+import { getSigningContext } from "../auth/signing-context";
 dotenv.config();
 
 /**
@@ -103,10 +104,17 @@ export class ListenKeyFeedBus extends EventEmitter {
             // If your server needs a subscribe message, send it here.
             // Example (adjust to your backend’s protocol):
             console.log(`🔌 ${MAGENTA} Connected: ListenKey WebSocket is now open${RESET}`);
+            // Use the active signing context's API key (sha256: TRADE_API_KEY, ed25519: ED25519_API_KEY)
+            let requestToken = process.env.TRADE_API_KEY ?? "";
+            try {
+                requestToken = getSigningContext().apiKey;
+            } catch {
+                // Signing context not yet set — fall back to env var
+            }
             this.ws?.send(JSON.stringify({
                 "account": "",
                 "unsubscribe": 0,
-                "requestToken": `${process.env.TRADE_API_KEY}`,
+                "requestToken": requestToken,
                 "channel": 'LIQUIDITY'
             }));
         });
