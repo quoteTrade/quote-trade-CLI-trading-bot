@@ -35,7 +35,7 @@ Create a `.env` from `sample.env` and fill in your endpoints/credentials.
 ```env
 API_BASE_URL=https://app.quote.trade/api
 LIQUIDITY_WS_URL=wss://app.quote.trade/ws/liquidity
-LISTEN_KEY_WS_URL=wss://bitpaired.com:2053/ws/listenKey
+LISTEN_KEY_WS_URL=wss://app.quote.trade/ws/listenKey
 
 # ── Auth Mode A: SHA256 API keys (registered via UI) ──────────────────────────
 TRADE_API_KEY=
@@ -126,7 +126,7 @@ These options apply to every command:
 | Option | Description |
 |--------|-------------|
 | `--debug` | Enable debug logging for auth steps (no secrets printed) |
-| `--auth-base-url <url>` | Override `API_BASE_URL` for wallet auth (e.g. `https://bitpaired.com:2053/liquidityApi`) |
+| `--auth-base-url <url>` | Override `API_BASE_URL` for wallet auth (e.g. `https://app.quote.trade/api`) |
 | `--signing-algorithm <sha256\|ed25519>` | Override `SIGNING_ALGORITHM` from `.env` |
 
 ---
