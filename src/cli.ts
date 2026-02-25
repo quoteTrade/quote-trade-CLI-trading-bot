@@ -48,7 +48,7 @@ program.version("", "", "");
 program.option("--debug", "Enable debug logging (auth steps, no secrets)");
 program.option(
   "--auth-base-url <url>",
-  "Wallet auth API base URL (overrides API_BASE_URL in .env, e.g. https://bitpaired.com:2053/liquidityApi)"
+  "Wallet auth API base URL (overrides API_BASE_URL in .env, e.g. https://app.quote.trade/api)"
 );
 program.option(
   "--signing-algorithm <algorithm>",

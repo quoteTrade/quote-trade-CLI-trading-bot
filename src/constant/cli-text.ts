@@ -10,7 +10,7 @@ Usage:
 Global options:
   --debug                              Enable debug logging for auth steps (no secrets printed)
   --auth-base-url <url>                Override API_BASE_URL for wallet auth
-                                       (e.g. https://bitpaired.com:2053/liquidityApi)
+                                       (e.g. https://app.quote.trade/api)
   --signing-algorithm <sha256|ed25519>
                                        Signing algorithm for API request headers.
                                        sha256  (default) — HMAC-SHA256(TRADE_API_SECRET, payload) → hex

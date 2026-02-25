@@ -15,7 +15,7 @@ export function resolveAuthBaseUrl(explicit?: string): string {
   if (!url) {
     throw new Error(
       "API base URL is not configured.\n" +
-      "Set API_BASE_URL in .env (e.g. https://bitpaired.com:2053/liquidityApi)\n" +
+      "Set API_BASE_URL in .env (e.g. https://app.quote.trade/api)\n" +
       "or pass --auth-base-url on the CLI."
     );
   }
