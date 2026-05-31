@@ -10,23 +10,24 @@
     "build": "tsc -p .",
     "start": "node dist/cli.js",
     "help": "node dist/cli.js -- help",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "test": "npm run build && node tests/trigger-engine.test.js && node tests/order-payload.test.js && node tests/llm-planner.test.js && node tests/codex-oauth.test.js"
   },
-  "keywords": [],
-  "author": "",
   "dependencies": {
     "axios": "^1.4.0",
     "commander": "^14.0.0",
     "dotenv": "^17.2.1",
     "ethers": "^6.16.0",
     "pino": "^9.9.0",
-    "ws": "^8.18.1"
+    "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@types/commander": "^2.12.5",
     "@types/node": "^24.3.0",
     "@types/ws": "^8.18.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "ws": "^8.20.1"
   }
 }

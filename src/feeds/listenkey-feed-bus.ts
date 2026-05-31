@@ -1,159 +1,108 @@
-import WebSocket from "ws";
-import * as dotenv from "dotenv";
 import EventEmitter from "node:events";
-import {MAGENTA, RESET} from "../ANSI";
+import * as dotenv from "dotenv";
+import WebSocket from "ws";
+import { MAGENTA, RESET } from "../ANSI";
 import { getSigningContext } from "../auth/signing-context";
+
 dotenv.config();
 
-/**
- * Map raw ORDER_TRADE_UPDATE payload (feed.o) -> normalized OrderUpdate.
- * NOTE: The React code groups by various FIX-like codes (X, x, o, etc).
- * We derive statuses conservatively:
- * - REJECTED if ordStatus (X) === '8'
- * - CANCELED if ordStatus (X) === '4'
- * - FILLED   if ordStatus (X) === '2' OR (execType in ['B','C','F'] and leavesQty==0 and cumQty>0)
- * - PARTIALLY_FILLED if execType in ['B','C','F'] and cumQty>0 and leavesQty>0
- * - otherwise NEW
- */
-function mapOrderTrade(o: any): any | null {
-    if (!o) return null;
-    const symbol = (o.s ?? '')?.split('/')[0];
-    const side = (o.S === "BUY" || o.S === "SELL") ? o.S : (o.S === "1" ? "BUY" : o.S === "2" ? "SELL" : "BUY");
-    const clientOrderId = String(o.c ?? "");
-    const orderId = o.i ? String(o.i) : undefined;
-    const ordStatus = String(o.X ?? ""); // e.g. '2' filled, '4' canceled, '8' rejected
-    const execType  = String(o.x ?? ""); // e.g. 'F' trade
-    const execId  = String(o.t ?? "");
-    const cumQty    = o.z != null ? String(o.z) : undefined;
-    const leavesQty = typeof o.lv === "number" ? o.lv : Number(o.lv ?? 0);
-    const qty   = o.q != null ? String(o.q) : undefined;
-    const lastQty   = o.l != null ? String(o.l) : undefined;
-    const price    = o.p != null ? String(o.p) : undefined;
-    const lastPx    = o.L != null ? String(o.L) : undefined;
-    const avgPx     = o.a != null ? String(o.a) : undefined;
-    const reason    = o.br != null ? String(o.br) : undefined;
-    const ts        = o.T;
-
-    let status = "NEW";
-    if (ordStatus === "8") status = "REJECTED";
-    else if (ordStatus === "4") status = "CANCELED";
-    else if (ordStatus === "2") status = "FILLED";
-    else {
-        const traded = ["B", "C", "F"].includes(execType);
-        const cum = Number(cumQty ?? 0);
-        if (traded && cum > 0 && leavesQty > 0) status = "PARTIALLY_FILLED";
-        if (traded && cum > 0 && leavesQty === 0) status = "FILLED";
-    }
-
-    return {
-        type: "orderUpdate",
-        clientOrderId,
-        execId,
-        orderId,
-        symbol,
-        side: side as "BUY"|"SELL",
-        status,
-        quantity: qty,
-        filledQty: lastQty,
-        fillPrice: lastPx,
-        price: price,
-        cumQty,
-        avgFillPrice: avgPx,
-        reason,
-        ts,
-    };
+function normalizePositionUpdate(feed: any): any[] {
+  const account = feed?.a ?? feed?.account ?? feed;
+  return [...(account?.P || []), ...(account?.positions || [])]
+    .map((item: any) => ({
+      ...item,
+      symbol: item.s ?? item.a ?? item.symbol,
+      quantity: item.pa ?? item.quantity,
+      availableQuantity: item.aq ?? item.availableQuantity ?? item.pa ?? item.quantity,
+      avgEntryPrice: item.ep ?? item.avgEntryPrice ?? item.uacb,
+      markPrice: item.m ?? item.markPrice ?? item.sm,
+    }))
+    .filter((item: any) => item.symbol);
 }
 
-/**
- * Map ACCOUNT_UPDATE payload to PositionUpdate(s).
- * React code merges a.B and a.P and uses pa (position amount) or wb (wallet balance).
- * For trading symbols (BTC, ETH...), we prefer pa (position amount) if present;
- * otherwise wb as a fallback. We skip non-trading symbols like USD/USDC/USDT.
- */
-function mapAccountPositions(feed: any): any[] {
-    const a = feed?.a ?? {};
-    const rows = [...(a.B ?? []), ...(a.P ?? [])];
-    const out: any[] = [];
-    for (const r of rows) {
-        const symbol = (r.s ?? r.a)?.split('/')[0];
-        if (!symbol || ["USD","USDC","USDT"].includes(symbol)) continue;
-        const pa = r.pa != null ? Number(r.pa) : undefined; // position amt (preferred)
-        const wb = r.wb != null ? Number(r.wb) : undefined; // wallet bal (fallback)
-        const qty = (pa != null ? pa : (wb != null ? wb : 0));
-        const avg = r.uacb != null ? String(r.uacb) : undefined; // avg cost basis if available
-        out.push({
-            type: "positionUpdate",
-            symbol,
-            netQty: String(qty),
-            avgEntryPrice: avg,
-            ts: feed.E ?? feed.T,
-        });
-    }
-    return out;
+function mapOrderTrade(order: any): any | null {
+  if (!order) return null;
+
+  return {
+    symbol: String(order.s ?? order.symbol ?? "").split("/")[0],
+    side: order.S === "BUY" || order.S === "1" ? "BUY" : "SELL",
+
+    timestamp: typeof order.T === "number" ? order.T : Date.now(),
+
+    lastPx: order.L != null ? String(order.L) : undefined,
+    avgPx: order.a != null ? String(order.a) : undefined,
+    clientOrderId: String(order.c ?? order.clientOrderId ?? ""),
+    timeInForce: order.f != null ? String(order.f) : undefined,
+    orderId: order.i ? String(order.i) : undefined,
+    lastQty: order.l != null ? String(order.l) : undefined,
+
+    quantity: order.q != null ? String(order.q) : undefined,
+    price: order.p != null ? String(order.p) : undefined,
+    price2: order.p2 != null ? String(order.p2) : undefined,
+
+    ordType: order.o != null ? String(order.o) : undefined,
+    orderType: order.o != null ? String(order.o) : undefined,
+    type: order.o != null ? String(order.o) : undefined,
+
+    ordStatus: order.X != null ? String(order.X) : String(order.status ?? "NEW"),
+    status: order.X != null ? String(order.X) : String(order.status ?? "NEW"),
+
+    execType: order.x != null ? String(order.x) : undefined,
+    orderRejectReason: order.r != null ? String(order.r) : undefined,
+
+    cumQty: order.z != null ? String(order.z) : undefined,
+    execId: order.t ? String(order.t) : undefined,
+    leavesQty: order.lv != null ? Number(order.lv) : undefined,
+
+    fillPrice: order.L ?? order.a,
+    raw: order,
+  };
 }
 
 export class ListenKeyFeedBus extends EventEmitter {
-    private ws?: WebSocket;
-    private reconnecting = false;
+  private ws?: WebSocket;
+  private reconnectTimer?: NodeJS.Timeout;
+  private stopped = false;
 
-    start() {
-        const url = process.env.LISTEN_KEY_WS_URL || '';
-        this.ws = new WebSocket(url);
+  start(): void {
+    const url = process.env.LISTEN_KEY_WS_URL || "";
+    this.stopped = false;
+    this.ws = new WebSocket(url);
 
-        this.ws.on("open", () => {
-            // If your server needs a subscribe message, send it here.
-            // Example (adjust to your backend’s protocol):
-            console.log(`🔌 ${MAGENTA} Connected: ListenKey WebSocket is now open${RESET}`);
-            // Use the active signing context's API key (sha256: TRADE_API_KEY, ed25519: ED25519_API_KEY)
-            let requestToken = process.env.TRADE_API_KEY ?? "";
-            try {
-                requestToken = getSigningContext().apiKey;
-            } catch {
-                // Signing context not yet set — fall back to env var
-            }
-            this.ws?.send(JSON.stringify({
-                "account": "",
-                "unsubscribe": 0,
-                "requestToken": requestToken,
-                "channel": 'LIQUIDITY'
-            }));
-        });
+    this.ws.on("open", () => {
+      console.log(` ${MAGENTA}Connected: listen-key WebSocket${RESET}`);
+      this.ws?.send(JSON.stringify({
+        unsubscribe: 0,
+        requestToken: getSigningContext().apiKey ?? process.env.TRADE_API_KEY ?? "",
+      }));
+    });
 
-        this.ws.on("message", (raw: WebSocket.RawData) => {
-            try {
-                const data: any = JSON.parse(raw.toString()) as any;
-                const evt = data?.e;
-                // console.log(evt, data);
+    this.ws.on("message", (data: WebSocket.RawData) => {
+      try {
+        const feed = JSON.parse(data.toString());
+        if (feed.e === "ORDER_TRADE_UPDATE" || feed.o) {
+          const update = mapOrderTrade(feed.o ?? feed);
+          if (update) this.emit("orderUpdate", update);
+        }
+        if (feed.e === "ACCOUNT_UPDATE" || feed.a?.P || feed.a?.B || feed.positions) {
+          for (const position of normalizePositionUpdate(feed)) this.emit("positionUpdate", position);
+        }
+      } catch (error) {
+        this.emit("error", error);
+      }
+    });
 
-                if (data.userId) {
-                    console.log(`📡 ${MAGENTA} Subscribed to listen key feed${RESET}`);
-                }
+    this.ws.on("close", () => {
+      if (!this.stopped) this.reconnectTimer = setTimeout(() => this.start(), 1000);
+    });
+    this.ws.on("error", (error: any) => this.emit("error", error));
+  }
 
-                if (evt === "ACCOUNT_UPDATE" && data?.a) {
-                    const pos = mapAccountPositions(data);
-                    for (const p of pos) this.emit("positionUpdate", p);
-                    return;
-                }
-
-                if (evt === "ORDER_TRADE_UPDATE" && data?.o) {
-                    const u = mapOrderTrade(data.o);
-                    if (u) this.emit("orderUpdate", u);
-                    return;
-                }
-            } catch (err: any) {
-                // ignore non-JSON frames / heartbeats
-                console.error("❌ Liquidity feed message error:", err.message || err);
-            }
-        });
-
-        this.ws.on("close", () => this.scheduleReconnect());
-        this.ws.on("error", () => this.scheduleReconnect());
+  stop(): void {
+    this.stopped = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === 0)) {
+      this.ws.close(1000, "client stop");
     }
-
-    private scheduleReconnect() {
-        if (this.reconnecting) return;
-        this.reconnecting = true;
-        this.emit("log", "🔁 WS closed — reconnecting in 1s…");
-        setTimeout(() => { this.reconnecting = false; this.start(); }, 1000);
-    }
+  }
 }
