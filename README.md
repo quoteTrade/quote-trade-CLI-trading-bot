@@ -7,6 +7,8 @@ The Quote.Trade API does not receive native trigger instructions in advance. The
 ## Build and test
 
 ```bash
+git clone https://github.com/quoteTrade/quote-trade-CLI-trading-bot
+cd quote-trade-CLI-trading-bot
 npm install
 npm run build
 npm test
