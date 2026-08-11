@@ -1,7 +1,7 @@
-import { Executor } from "../types";
 import { GREEN, RED, RESET } from "../ANSI";
 import { HttpSvc } from "../services/http.service";
-import { SubmitOrderRequest, SubmitOrderResult, toQuoteTradeSide } from "../triggers/types";
+import { type SubmitOrderRequest, type SubmitOrderResult, toQuoteTradeSide } from "../triggers/types";
+import type { Executor } from "../types";
 
 export class TradeExecutor implements Executor {
   private mode = (process.env.MODE ?? "paper").toLowerCase();
@@ -19,7 +19,9 @@ export class TradeExecutor implements Executor {
     if (req.type === "LIMIT" && req.price !== undefined) formattedReq.price = req.price;
 
     if (this.mode !== "real") {
-      console.log(`[PAPER] would submit ${req.type} ${req.side} ${req.symbol} qty=${req.quantity} price=${req.price ?? "MARKET"}`);
+      console.log(
+        `[PAPER] would submit ${req.type} ${req.side} ${req.symbol} qty=${req.quantity} price=${req.price ?? "MARKET"}`,
+      );
       return { clientOrderId: req.clientOrderId ?? `paper_${Date.now()}`, paper: true, raw: formattedReq };
     }
 
@@ -31,13 +33,25 @@ export class TradeExecutor implements Executor {
     };
   }
 
-  async buy(symbol:string, quantity:string, price:number, reason:string): Promise<any> {
+  async buy(symbol: string, quantity: string, price: number, reason: string): Promise<any> {
     console.log(`⏳ ${GREEN}[BUY SIGNAL]${RESET} ${symbol} price=${price.toFixed(2)} reason=${reason}`);
-    return this.submitOrder({ symbol, side:"BUY", type:"MARKET", quantity:Number(quantity), paymentCurrency:"USD" });
+    return this.submitOrder({
+      symbol,
+      side: "BUY",
+      type: "MARKET",
+      quantity: Number(quantity),
+      paymentCurrency: "USD",
+    });
   }
 
-  async sell(symbol:string, quantity:string, price:number, reason:string): Promise<any> {
+  async sell(symbol: string, quantity: string, price: number, reason: string): Promise<any> {
     console.log(`⏳ ${RED}[SELL SIGNAL]${RESET} ${symbol} price=${price.toFixed(2)} reason=${reason}`);
-    return this.submitOrder({ symbol, side:"SELL", type:"MARKET", quantity:Number(quantity), paymentCurrency:"USD" });
+    return this.submitOrder({
+      symbol,
+      side: "SELL",
+      type: "MARKET",
+      quantity: Number(quantity),
+      paymentCurrency: "USD",
+    });
   }
 }

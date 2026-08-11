@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { normalizeSymbol, PositionSnapshot, sideToClosePosition } from "./types";
 import type { OrderSide } from "./types";
+import { normalizeSymbol, type PositionSnapshot, sideToClosePosition } from "./types";
 
 function defaultDataFile(name: string): string {
   return join(process.env.QUOTE_TRADE_STATE_DIR || join(process.cwd(), ".quote-trade"), name);
@@ -38,14 +38,39 @@ export function normalizePosition(raw: any, fallbackSymbol?: string): PositionSn
   const symbolRaw = raw.symbol ?? raw.s ?? raw.a ?? raw.asset ?? fallbackSymbol;
   if (!symbolRaw) return undefined;
 
-  const hasPositionQuantity = raw.netQty !== undefined || raw.positionAmt !== undefined || raw.pa !== undefined || raw.quantity !== undefined || raw.qty !== undefined || raw.availableQty !== undefined || raw.availableQuantity !== undefined || raw.aq !== undefined;
+  const hasPositionQuantity =
+    raw.netQty !== undefined ||
+    raw.positionAmt !== undefined ||
+    raw.pa !== undefined ||
+    raw.quantity !== undefined ||
+    raw.qty !== undefined ||
+    raw.availableQty !== undefined ||
+    raw.availableQuantity !== undefined ||
+    raw.aq !== undefined;
   if (!hasPositionQuantity) return undefined;
 
   const symbol = normalizeSymbol(String(symbolRaw).split("/")[0]);
-  const netQty = toNumber(raw.netQty, raw.positionAmt, raw.pa, raw.quantity, raw.qty, raw.availableQuantity, raw.aq) ?? 0;
-  const availableQty = toNumber(raw.availableQty, raw.availableQuantity, raw.aq, raw.free, raw.quantity, raw.qty, raw.pa) ?? netQty;
-  const avgEntryPrice = toNumber(raw.avgEntryPrice, raw.entryPrice, raw.usdAvgCostBasis, raw.uacb, raw.avgPrice, raw.ep);
-  const markPrice = toNumber(raw.markPrice, raw.baseUsdMark, raw.m, raw.settleCoinUsdMark, raw.sm, raw.price, raw.lastPrice);
+  const netQty =
+    toNumber(raw.netQty, raw.positionAmt, raw.pa, raw.quantity, raw.qty, raw.availableQuantity, raw.aq) ?? 0;
+  const availableQty =
+    toNumber(raw.availableQty, raw.availableQuantity, raw.aq, raw.free, raw.quantity, raw.qty, raw.pa) ?? netQty;
+  const avgEntryPrice = toNumber(
+    raw.avgEntryPrice,
+    raw.entryPrice,
+    raw.usdAvgCostBasis,
+    raw.uacb,
+    raw.avgPrice,
+    raw.ep,
+  );
+  const markPrice = toNumber(
+    raw.markPrice,
+    raw.baseUsdMark,
+    raw.m,
+    raw.settleCoinUsdMark,
+    raw.sm,
+    raw.price,
+    raw.lastPrice,
+  );
 
   return {
     symbol,
@@ -70,12 +95,12 @@ export class PositionStore {
 
   private positionList(rawPositions: any): any[] {
     return Array.isArray(rawPositions)
-        ? rawPositions
-        : Array.isArray(rawPositions?.positions)
-            ? rawPositions.positions
-            : Array.isArray(rawPositions?.data)
-                ? rawPositions.data
-                : [];
+      ? rawPositions
+      : Array.isArray(rawPositions?.positions)
+        ? rawPositions.positions
+        : Array.isArray(rawPositions?.data)
+          ? rawPositions.data
+          : [];
   }
 
   load(): void {
@@ -99,14 +124,18 @@ export class PositionStore {
   }
 
   merge(rawPositions: any): PositionSnapshot[] {
-    const merged = this.positionList(rawPositions).map((position: any) => this.upsert(position, undefined, false)).filter(Boolean) as PositionSnapshot[];
+    const merged = this.positionList(rawPositions)
+      .map((position: any) => this.upsert(position, undefined, false))
+      .filter(Boolean) as PositionSnapshot[];
     if (merged.length) this.save();
     return merged;
   }
 
   replace(rawPositions: any): PositionSnapshot[] {
     this.positions.clear();
-    const replaced = this.positionList(rawPositions).map((position: any) => normalizePosition(position)).filter(Boolean) as PositionSnapshot[];
+    const replaced = this.positionList(rawPositions)
+      .map((position: any) => normalizePosition(position))
+      .filter(Boolean) as PositionSnapshot[];
     for (const position of replaced) this.positions.set(position.symbol, position);
     this.save();
     return replaced;
@@ -144,9 +173,7 @@ export class PositionStore {
     if (netQty <= 0) return 0;
 
     const availableQty =
-        position.availableQty === undefined || position.availableQty === null
-            ? netQty
-            : Math.abs(position.availableQty);
+      position.availableQty === undefined || position.availableQty === null ? netQty : Math.abs(position.availableQty);
 
     return Math.min(netQty, availableQty);
   }
@@ -166,7 +193,8 @@ export class PositionStore {
 
   describe(): string {
     const rows = this.list();
-    if (!rows.length) return "No positions cached yet. Run positions:refresh or start the watcher to receive account updates.";
+    if (!rows.length)
+      return "No positions cached yet. Run positions:refresh or start the watcher to receive account updates.";
     return rows
       .map((position) => {
         const avg = position.avgEntryPrice ? ` avg=${position.avgEntryPrice}` : "";

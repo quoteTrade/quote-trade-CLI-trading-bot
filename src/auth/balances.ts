@@ -1,1 +1,4 @@
-export interface Balance { symbol: string; quantity: string; }
+export interface Balance {
+  symbol: string;
+  quantity: string;
+}

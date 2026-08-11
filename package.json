@@ -10,8 +10,7 @@
     "build": "tsc -p .",
     "start": "node dist/cli.js",
     "help": "node dist/cli.js -- help",
-    "cli": "node dist/cli.js",
-    "test": "npm run build && node tests/trigger-engine.test.js && node tests/order-payload.test.js && node tests/llm-planner.test.js && node tests/codex-oauth.test.js"
+    "cli": "node dist/cli.js"
   },
   "dependencies": {
     "axios": "^1.4.0",
@@ -29,5 +28,8 @@
   },
   "overrides": {
     "ws": "^8.20.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

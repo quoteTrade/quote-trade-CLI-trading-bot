@@ -71,10 +71,12 @@ export class ListenKeyFeedBus extends EventEmitter {
 
     this.ws.on("open", () => {
       console.log(` ${MAGENTA}Connected: listen-key WebSocket${RESET}`);
-      this.ws?.send(JSON.stringify({
-        unsubscribe: 0,
-        requestToken: getSigningContext().apiKey ?? process.env.TRADE_API_KEY ?? "",
-      }));
+      this.ws?.send(
+        JSON.stringify({
+          unsubscribe: 0,
+          requestToken: getSigningContext().apiKey ?? process.env.TRADE_API_KEY ?? "",
+        }),
+      );
     });
 
     this.ws.on("message", (data: WebSocket.RawData) => {

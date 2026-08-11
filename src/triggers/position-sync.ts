@@ -1,6 +1,8 @@
-import { PositionStore } from "./position-store";
+import type { PositionStore } from "./position-store";
 
-export interface HttpLike { get(path: string, config?: any): Promise<any>; }
+export interface HttpLike {
+  get(path: string, config?: any): Promise<any>;
+}
 
 function extractPositions(payload: any): { found: boolean; positions: any[] } {
   // Support ACCOUNT_UPDATE-style WS payload if API returns same shape.
@@ -12,7 +14,10 @@ function extractPositions(payload: any): { found: boolean; positions: any[] } {
 }
 
 export class PositionSyncService {
-  constructor(private http: HttpLike, private store: PositionStore) {}
+  constructor(
+    private http: HttpLike,
+    private store: PositionStore,
+  ) {}
 
   async refresh(config: any = {}): Promise<number> {
     const path = process.env.POSITIONS_ENDPOINT || "/positions";

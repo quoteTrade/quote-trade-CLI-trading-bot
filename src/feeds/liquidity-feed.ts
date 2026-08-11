@@ -2,7 +2,7 @@ import EventEmitter from "node:events";
 import * as dotenv from "dotenv";
 import WebSocket from "ws";
 import { MAGENTA, RESET } from "../ANSI";
-import { OrderBookMessage, PriceFeed, Tick } from "../types";
+import type { OrderBookMessage, PriceFeed, Tick } from "../types";
 
 dotenv.config();
 
@@ -49,7 +49,8 @@ export class LiquidityFeed extends EventEmitter implements PriceFeed {
       this.ws.on("message", (data: WebSocket.RawData) => {
         try {
           const msg = JSON.parse(data.toString()) as OrderBookMessage;
-          if (msg.status === "subscribed") console.log(` ${MAGENTA}Subscribed to ${symbol}, candle=${candleMs}ms${RESET}`);
+          if (msg.status === "subscribed")
+            console.log(` ${MAGENTA}Subscribed to ${symbol}, candle=${candleMs}ms${RESET}`);
 
           const tick = tickFromOrderBook(symbol, msg);
           if (!tick) return;
