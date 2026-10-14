@@ -1,3 +1,5 @@
+import type { SubmitOrderResult } from "./triggers/types";
+
 export interface Tick {
   ts: number;
   price?: number;
@@ -7,6 +9,7 @@ export interface Tick {
   askQty?: number;
   mark?: number;
   orderBook?: unknown;
+  depthQuantityMode?: "cumulative" | "per-level";
 }
 export interface OrderBookLevel {
   p: number;
@@ -23,6 +26,6 @@ export interface PriceFeed {
   start(symbol: string, candleMs: number, onTick: (t: Tick) => void): () => void;
 }
 export interface Executor {
-  buy(symbol: string, quantity: string, price: number, reason: string): Promise<any>;
-  sell(symbol: string, quantity: string, price: number, reason: string): Promise<any>;
+  buy(symbol: string, quantity: string, price: number, reason: string): Promise<SubmitOrderResult>;
+  sell(symbol: string, quantity: string, price: number, reason: string): Promise<SubmitOrderResult>;
 }

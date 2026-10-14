@@ -207,6 +207,7 @@ function runTriggerWatcher(symbols?: string[]): void {
           mark: tick.mark,
           ts: tick.ts,
           orderBook: tick.orderBook,
+          depthQuantityMode: tick.depthQuantityMode,
         });
       }),
     );

@@ -12,7 +12,7 @@ export interface RSIRunnerConfig {
 export class RSIRunner {
   private stopFeed?: () => void;
   private inflight = false;
-  private lastPosition: any;
+  private lastPosition?: unknown;
   constructor(
     private feed: PriceFeed,
     _executor: Executor,
@@ -28,7 +28,7 @@ export class RSIRunner {
   clearInflight(): void {
     this.inflight = false;
   }
-  applyPosition(p: any): void {
+  applyPosition(p: unknown): void {
     this.lastPosition = p;
   }
   status(): string {

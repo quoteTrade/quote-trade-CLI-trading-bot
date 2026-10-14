@@ -6,6 +6,11 @@ import type { OrderBookMessage, PriceFeed, Tick } from "../types";
 
 dotenv.config();
 
+function errorMessage(error: unknown): unknown {
+  if (typeof error === "object" && error !== null && "message" in error) return error.message;
+  return error;
+}
+
 function tickFromOrderBook(symbol: string, msg: OrderBookMessage): Tick | undefined {
   if (!msg?.bids?.length || !msg?.asks?.length) return undefined;
   if (msg.s && msg.s.toUpperCase() !== symbol.toUpperCase()) return undefined;
@@ -24,6 +29,7 @@ function tickFromOrderBook(symbol: string, msg: OrderBookMessage): Tick | undefi
     bidQty: Number.isFinite(bidQty) && bidQty > 0 ? bidQty : undefined,
     askQty: Number.isFinite(askQty) && askQty > 0 ? askQty : undefined,
     orderBook: msg,
+    depthQuantityMode: "cumulative",
   };
 }
 
@@ -59,12 +65,12 @@ export class LiquidityFeed extends EventEmitter implements PriceFeed {
           lastEmitAt = tick.ts;
           this.emit("tick", symbol, tick);
           onTick(tick);
-        } catch (error: any) {
-          console.error("liquidity message error", error?.message ?? error);
+        } catch (error: unknown) {
+          console.error("liquidity message error", errorMessage(error));
         }
       });
 
-      this.ws.on("error", (error: any) => console.error("liquidity error", error?.message ?? error));
+      this.ws.on("error", (error) => console.error("liquidity error", errorMessage(error)));
       this.ws.on("close", () => {
         if (!this.stopped) this.reconnectTimer = setTimeout(connect, 1000);
       });

@@ -56,6 +56,17 @@ function positiveNumber(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+/**
+ * Store calls below operate on ids the store itself just returned. A missing
+ * result therefore means the engine's view of the trigger store is corrupt or
+ * an unsupported store implementation broke the contract. Do not continue
+ * with a stale trigger: that can duplicate an order or record the wrong state.
+ */
+function requireStoredTrigger(trigger: TriggerOrder | undefined, id: string, operation: string): TriggerOrder {
+  if (!trigger) throw new Error(`Trigger store invariant violated: ${operation} could not find trigger ${id}`);
+  return trigger;
+}
+
 function patchChanges(trigger: TriggerOrder, patch: Partial<TriggerOrder>, ignore = new Set<string>()): boolean {
   return Object.entries(patch).some(([key, value]) => !ignore.has(key) && (trigger as any)[key] !== value);
 }
@@ -85,7 +96,7 @@ export class TriggerEngine {
     await this.processDueTimers(Date.now());
 
     for (const baseTrigger of this.store.active(symbol)) {
-      const trigger = this.store.get(baseTrigger.id) ?? baseTrigger;
+      const trigger = requireStoredTrigger(this.store.get(baseTrigger.id), baseTrigger.id, "active trigger lookup");
       if (trigger.status !== "ACTIVE" || isTimer(trigger)) continue;
 
       if (trigger.kind === "RISK_GUARD") {
@@ -303,16 +314,28 @@ export class TriggerEngine {
         dynamicPatch = { lowWaterMark, currentStopPrice: lowWaterMark + distance };
       }
       const moved = patchChanges(trigger, dynamicPatch);
-      return this.store.update(trigger.id, { ...dynamicPatch, lastCheckedPrice: price }, { persist: moved }) ?? trigger;
+      return requireStoredTrigger(
+        this.store.update(trigger.id, { ...dynamicPatch, lastCheckedPrice: price }, { persist: moved }),
+        trigger.id,
+        "trailing-stop state update",
+      );
     }
 
     if (trigger.kind === "BREAK_EVEN_STOP") {
       const patch = this.breakEvenPatch(trigger, price);
       const changed = patchChanges(trigger, patch, new Set(["meta"]));
-      return this.store.update(trigger.id, { ...patch, lastCheckedPrice: price }, { persist: changed }) ?? trigger;
+      return requireStoredTrigger(
+        this.store.update(trigger.id, { ...patch, lastCheckedPrice: price }, { persist: changed }),
+        trigger.id,
+        "break-even state update",
+      );
     }
 
-    return this.store.update(trigger.id, { lastCheckedPrice: price }, { persist: false }) ?? trigger;
+    return requireStoredTrigger(
+      this.store.update(trigger.id, { lastCheckedPrice: price }, { persist: false }),
+      trigger.id,
+      "last-price update",
+    );
   }
 
   private breakEvenPatch(trigger: TriggerOrder, price: number): Partial<TriggerOrder> {
@@ -320,9 +343,16 @@ export class TriggerEngine {
     const entry = position?.avgEntryPrice;
     if (!entry || entry <= 0) return {};
 
-    const closeSide = trigger.closePosition
-      ? (this.positions.getCloseSide(trigger.symbol) ?? trigger.side)
-      : trigger.side;
+    let closeSide = trigger.side;
+    if (trigger.closePosition) {
+      const resolvedCloseSide = this.positions.getCloseSide(trigger.symbol);
+      if (!resolvedCloseSide) {
+        throw new Error(
+          `Position invariant violated: break-even trigger ${trigger.id} cannot resolve a close side for ${trigger.symbol}`,
+        );
+      }
+      closeSide = resolvedCloseSide;
+    }
     const activationDistance = distanceFromMode(entry, trigger.activationMode, trigger.activationValue);
     const lockDistance = distanceFromMode(entry, trigger.lockMode, trigger.lockValue ?? 0);
     const activationPrice = closeSide === "SELL" ? entry + activationDistance : entry - activationDistance;
@@ -345,8 +375,11 @@ export class TriggerEngine {
 
   private isRiskGuardBreached(trigger: TriggerOrder): boolean {
     const position = this.positions.get(trigger.symbol);
-    const threshold = trigger.riskThreshold ?? 0;
-    if (!position || threshold <= 0) return false;
+    if (!position) return false;
+    const threshold = positiveNumber(trigger.riskThreshold);
+    if (!threshold) {
+      throw new Error(`Trigger invariant violated: risk guard ${trigger.id} requires a positive riskThreshold`);
+    }
 
     if (trigger.riskMetric === "MAX_POSITION_QTY") return Math.abs(position.netQty) >= threshold;
     if (trigger.riskMetric === "MAX_RISK_USD") return position.riskUsd >= threshold;
@@ -356,7 +389,7 @@ export class TriggerEngine {
 
   private async fire(trigger: TriggerOrder, marketPrice: number): Promise<void> {
     if (this.firing.has(trigger.id)) return;
-    let latest = this.store.get(trigger.id) ?? trigger;
+    let latest = requireStoredTrigger(this.store.get(trigger.id), trigger.id, "pre-submission lookup");
     if (latest.status !== "ACTIVE") return;
     this.firing.add(trigger.id);
 
@@ -399,13 +432,16 @@ export class TriggerEngine {
 
       this.store.update(latest.id, { firedAt: Date.now(), lastCheckedPrice: marketPrice });
       const result = await this.executor.submitOrder(order);
-      const fired =
+      const fired = requireStoredTrigger(
         this.store.setStatus(latest.id, "TRIGGERED", {
           orderId: result.orderId,
           clientOrderId: result.clientOrderId,
           firedAt: Date.now(),
           lastCheckedPrice: marketPrice,
-        }) ?? latest;
+        }),
+        latest.id,
+        "post-submission status update",
+      );
 
       const cancelled = this.store.cancelOcoSiblings(fired.ocoGroupId, fired.id);
       if (cancelled.length) this.options.onAction?.(fired, `Cancelled ${cancelled.length} OCO sibling trigger(s).`);
@@ -426,14 +462,16 @@ export class TriggerEngine {
   private recordBracketEntrySubmission(trigger: TriggerOrder): TriggerOrder {
     if (!trigger.meta?.bracket || trigger.meta.bracketEntrySubmittedAt) return trigger;
     const netQtyBefore = this.positions.get(trigger.symbol)?.netQty ?? 0;
-    return (
+    return requireStoredTrigger(
       this.store.update(trigger.id, {
         meta: {
           ...trigger.meta,
           bracketEntrySubmittedAt: Date.now(),
           bracketEntryNetQtyBefore: netQtyBefore,
         },
-      }) ?? trigger
+      }),
+      trigger.id,
+      "bracket entry metadata update",
     );
   }
 
@@ -476,13 +514,19 @@ export class TriggerEngine {
     if (opened <= 0) return 0;
 
     const target = positiveNumber(parent.quantity);
-    const available = Math.abs(position.availableQty || position.netQty || 0);
-    return Math.max(0, Math.min(opened, target ?? opened, available || opened));
+    const availableQuantity = position.availableQty === 0 ? position.netQty : position.availableQty;
+    if (!Number.isFinite(availableQuantity)) {
+      throw new Error(
+        `Position invariant violated: bracket trigger ${parent.id} requires a finite available quantity for ${parent.symbol}`,
+      );
+    }
+    const available = Math.abs(availableQuantity);
+    return Math.max(0, Math.min(opened, target ?? opened, available > 0 ? available : opened));
   }
 
   private createBracketExits(parent: TriggerOrder, filledQuantity: number): TriggerOrder[] {
     const bracket = parent.meta?.bracket as any;
-    if (!bracket) return [];
+    if (!bracket) throw new Error(`Trigger invariant violated: bracket trigger ${parent.id} has no bracket metadata`);
 
     const takeProfitPrice = positiveNumber(bracket.takeProfitPrice);
     const stopLossPrice = positiveNumber(bracket.stopLossPrice);
@@ -519,7 +563,11 @@ export class TriggerEngine {
       groupId,
     );
 
-    this.store.update(parent.id, { meta: { ...parent.meta, bracketChildrenCreated: true } });
+    requireStoredTrigger(
+      this.store.update(parent.id, { meta: { ...parent.meta, bracketChildrenCreated: true } }),
+      parent.id,
+      "bracket children status update",
+    );
     this.options.onAction?.(parent, `Bracket exits armed for ${parent.symbol} after position update.`);
     return children;
   }
@@ -529,11 +577,15 @@ export class TriggerEngine {
     for (const trigger of this.store.active(parent.symbol)) {
       if (!trigger.meta?.bracketExit || trigger.meta.parentTriggerId !== parent.id || trigger.closePosition) continue;
       if (roughlyEqual(trigger.quantity, filledQuantity)) continue;
-      const next = this.store.update(trigger.id, {
-        quantity: filledQuantity,
-        meta: { ...trigger.meta, bracketExitQuantity: filledQuantity },
-      });
-      if (next) changed.push(next);
+      const next = requireStoredTrigger(
+        this.store.update(trigger.id, {
+          quantity: filledQuantity,
+          meta: { ...trigger.meta, bracketExitQuantity: filledQuantity },
+        }),
+        trigger.id,
+        "bracket exit quantity update",
+      );
+      changed.push(next);
     }
     return changed;
   }
