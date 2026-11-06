@@ -147,7 +147,7 @@ export interface SubmitOrderRequest {
   type: "MARKET" | "LIMIT";
   quantity: number;
   price?: number;
-  account?: string;
+  account?: string | number;
   paymentCurrency?: string;
   reduceOnly?: boolean;
   disableLeverage?: boolean | 0 | 1;

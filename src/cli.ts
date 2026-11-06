@@ -87,6 +87,10 @@ function parsePositiveFloat(value: string): number {
   return n;
 }
 
+function parseDecimalInteger(value: string): number {
+  return Number.parseInt(value, 10);
+}
+
 function parseNonNegativeFloat(value: string): number {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw new Error(`Expected non-negative number, got ${value}`);
@@ -300,10 +304,10 @@ program
   .requiredOption("--symbol <symbol>")
   .option("--notionalUsd <number>", "Order size", parseFloat, 20)
   .option("--timeframe <tf>", "1m|5m|15m|1h|4h|1d", "1m")
-  .option("--period <number>", "RSI period", parseInt, 14)
+  .option("--period <number>", "RSI period", parseDecimalInteger, 14)
   .option("--low <number>", "Oversold", parseFloat, 30)
   .option("--high <number>", "Overbought", parseFloat, 70)
-  .option("--maxOrdersPerCycle <number>", "Max orders", parseInt, 2)
+  .option("--maxOrdersPerCycle <number>", "Max orders", parseDecimalInteger, 2)
   .option("--create-wallet")
   .option("--existing-wallet")
   .action(async (opts) => {
@@ -799,9 +803,9 @@ program
 
 program
   .command("filledorders:refresh")
-  .option("--page <page>", "Page number", parseInt, 1)
-  .option("--page-size <size>", "Page size", parseInt, 10)
-  .option("--wait-ms <ms>", "How long to listen for WS order updates", parseInt, 5000)
+  .option("--page <page>", "Page number", parseDecimalInteger, 1)
+  .option("--page-size <size>", "Page size", parseDecimalInteger, 10)
+  .option("--wait-ms <ms>", "How long to listen for WS order updates", parseDecimalInteger, 5000)
   .action(async (opts) => {
     await resolveForCommand({});
 

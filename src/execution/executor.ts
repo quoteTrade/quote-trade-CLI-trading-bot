@@ -17,16 +17,30 @@ interface QuoteTradeOrderPayload {
   paymentCurrency: string;
   timestamp: number;
   price?: number;
-  account?: string;
+  account?: number;
   clientOrderId?: string;
   reduceOnly?: boolean;
   disableLeverage?: 0 | 1;
+}
+
+function parseAccount(value: string | number | undefined): number | undefined {
+  if (value === undefined || String(value).trim() === "") return undefined;
+  const account = Number(value);
+  if (!Number.isSafeInteger(account) || account <= 0) {
+    throw new Error("TRADE_ACCOUNT_ID must be a positive integer");
+  }
+  return account;
 }
 
 export class TradeExecutor implements Executor {
   private mode = (process.env.MODE ?? "paper").toLowerCase();
 
   async submitOrder(req: SubmitOrderRequest): Promise<SubmitOrderResult> {
+    const configuredAccount = req.account ?? process.env.TRADE_ACCOUNT_ID ?? process.env.QUOTE_TRADE_ACCOUNT_ID;
+    const account = parseAccount(configuredAccount);
+    if (this.mode === "real" && account === undefined) {
+      throw new Error("TRADE_ACCOUNT_ID is required when MODE=real");
+    }
     const formattedReq: QuoteTradeOrderPayload = {
       liquidityOrder: 1,
       symbol: req.symbol,
@@ -34,11 +48,11 @@ export class TradeExecutor implements Executor {
       type: req.type,
       quantity: Number(req.quantity),
       paymentCurrency: req.paymentCurrency ?? "USD",
+      disableLeverage: req.disableLeverage === false || req.disableLeverage === 0 ? 0 : 1,
       timestamp: Date.now(),
     };
     if (req.type === "LIMIT" && req.price !== undefined) formattedReq.price = req.price;
-    if (req.account !== undefined) formattedReq.account = req.account;
-    if (req.disableLeverage !== undefined) formattedReq.disableLeverage = req.disableLeverage ? 1 : 0;
+    if (account !== undefined) formattedReq.account = account;
     if (req.clientOrderId !== undefined) formattedReq.clientOrderId = req.clientOrderId;
     if (req.reduceOnly !== undefined) formattedReq.reduceOnly = req.reduceOnly;
 

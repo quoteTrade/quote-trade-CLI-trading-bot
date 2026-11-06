@@ -7,6 +7,11 @@ class HttpService {
   private full(path: string): string {
     return /^https?:\/\//i.test(path) ? path : `${this.apiUrl}${path}`;
   }
+  private query(path: string): string {
+    const start = path.indexOf("?");
+    if (start === -1) return "";
+    return path.slice(start + 1).split("#", 1)[0];
+  }
   private headersFor(payload: string, config: any = {}): any {
     const headers = { ...(config.headers || {}) };
     const ctx = getSigningContext();
@@ -15,14 +20,17 @@ class HttpService {
     return headers;
   }
   async get(path: string, config: any = {}): Promise<any> {
-    const resp = await axios.get(this.full(path), { ...config, headers: this.headersFor(path, config) });
+    const resp = await axios.get(this.full(path), { ...config, headers: this.headersFor(this.query(path), config) });
     return resp.data;
   }
   async post(path: string, body: any = {}, config: any = {}): Promise<any> {
     const payload = JSON.stringify({ ...body, channel: body.channel ?? "LIQUIDITY" });
-    const resp = await axios.post(this.full(path), JSON.parse(payload), {
+    const headers = this.headersFor(payload, config);
+    if (!headers["Content-Type"] && !headers["content-type"]) headers["Content-Type"] = "application/json";
+    const resp = await axios.post(this.full(path), payload, {
       ...config,
-      headers: this.headersFor(payload, config),
+      headers,
+      transformRequest: [(data: string) => data],
     });
     return resp.data;
   }

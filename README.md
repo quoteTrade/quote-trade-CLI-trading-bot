@@ -14,6 +14,20 @@ npm run build
 npm test
 ```
 
+## Trading API configuration
+
+Real-mode order submission requires the Quote.Trade account ID associated with
+the configured API key. Keep the value in the ignored `.env` file:
+
+```bash
+MODE=real
+TRADE_ACCOUNT_ID=12345
+```
+
+`TRADE_ACCOUNT_ID` must be a positive integer. `QUOTE_TRADE_ACCOUNT_ID` is also
+accepted for compatibility. Orders default to `disableLeverage=1`; callers must
+opt in explicitly to leverage and shorting.
+
 ## L2 trigger-price rule
 
 Price-based triggers are now side- and quantity-aware:
